@@ -1,0 +1,155 @@
+1) создание нового отдела(исключение – отдел существует);
+
+create or replace procedure add_dep
+(
+    p_dep_name in dept.d_name%type,
+    p_location in dept.location%type
+) is
+v_column integer;
+v_dep_name VARCHAR2(255);
+v_bNameExist boolean default TRUE;
+e_dep_name_exist exception; 
+
+begin
+
+  select max(d_no) INTO v_column FROM dept;
+
+  for rec in (select d_name from dept) loop
+    if rec.d_name = p_dep_name then 
+        v_bNameExist := TRUE;
+        raise e_dep_name_exist;
+    else
+        v_bNameExist := FALSE;
+    end if;
+     
+  end loop;
+
+if v_bNameExist = FALSE then 
+    insert into dept(d_no, d_name, location) values (v_column + 1, p_dep_name, p_location);
+end if;
+
+exception
+    when e_dep_name_exist then raise_application_error (-20001, 'Такой департамент существует!');
+end add_dep;
+
+
+2) прием на работу нового сотрудника(исключения – сотрудник есть, такого отдела нет);
+
+
+create or replace procedure add_new_emp
+(
+    p_e_name in emp.e_name%type,
+    p_date_hire in emp.date_hire%type,
+    p_salary in emp.salary%type,
+    p_address in emp.address%type,
+    p_d_name in dept.d_name%type
+) is
+v_e_name VARCHAR2(255);
+v_bENameExist boolean default TRUE;
+e_emp_exist exception;
+
+v_column integer;
+
+v_d_name VARCHAR2(255);
+v_d_no dept.d_no%type;
+v_bDNameExist boolean default TRUE;
+e_d_name_not_exist exception; 
+
+begin
+
+    select max(e_no) into v_column from emp;
+
+    --d_name
+    for rec in (select d_name, d_no from dept) loop
+        if rec.d_name = p_d_name then 
+            v_bDNameExist := TRUE; 
+            v_d_no := rec.d_no;
+            exit;
+        else
+            v_bDNameExist := FALSE;
+        end if;
+    end loop;
+    
+    --e_name
+    for rec in (select e_name, d_no from emp) loop
+        if rec.e_name = p_e_name then 
+            v_bENameExist := TRUE; 
+            if rec.d_no = v_d_no then 
+                raise e_emp_exist;
+            end if;
+        else
+            v_bENameExist := FALSE;
+        end if;
+    end loop;
+
+if v_bDNameExist = false then
+    raise e_d_name_not_exist;
+end if;
+
+if v_bENameExist = FALSE and v_bDNameExist = TRUE then 
+    insert into emp(e_no, e_name, date_hire, salary, address, d_no) values (v_column + 1, p_e_name, p_date_hire, p_salary, p_address, v_d_no);
+end if;
+
+exception
+    when e_emp_exist then raise_application_error (-20001, 'Такой сотрудник уже работает!');
+    when e_d_name_not_exist then raise_application_error (-20001, 'Такого отдела нету!');
+end add_new_emp;
+
+
+
+3) изменение зарплаты указанному сотруднику на заданную величину( 2 параметра: фамилия сотрудника и величина изменения з/пл(если число положительное, то зарплата увеличивается, если отрицательное, то зарплата уменьшается)
+исключение – нет сотрудника;
+
+create or replace procedure change_salary
+(
+    p_e_name in emp.e_name%type,
+    p_add_to_salary in emp.salary%type
+
+) is
+v_e_name VARCHAR2(255);
+e_emp_not_exist exception;
+v_e_no integer;
+v_salary integer;
+v_bENameExist boolean default TRUE;
+
+begin
+
+    --e_name
+    for rec in (select e_name, e_no, salary from emp) loop
+        if rec.e_name = p_e_name then 
+            v_bENameExist := TRUE;
+            v_e_no := rec.e_no;
+            v_salary := rec.salary + p_add_to_salary;
+            exit;  
+        else
+            v_bENameExist := FALSE;
+        end if;
+    end loop;
+
+if v_bENameExist = false then
+    raise e_emp_not_exist;
+else
+    update emp set salary = v_salary where e_no = v_e_no;
+end if;
+
+exception
+    when e_emp_not_exist then raise_application_error (-20001, 'Такого сотрудника нету!');
+end change_salary;
+
+
+4) Реструктуризация фирмы - отделы с названием Sales перевести в Chicago, остальные в New York (процедура без параметров) исключений нет.
+
+
+create or replace procedure restruct_dept
+is
+begin
+    --d_name
+    for rec in (select d_name from dept) loop
+        if rec.d_name = 'Sales' then 
+            update dept set location = 'Chicago' where d_name = 'Sales';
+        else
+            update dept set location = 'New-York' where d_name <> 'Sales'; -- <>  не равно
+        end if;
+    end loop;
+
+
